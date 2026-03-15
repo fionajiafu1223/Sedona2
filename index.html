@@ -307,7 +307,7 @@
 
 <!-- Decision buttons removed — bubbles auto-release on arrival -->
 
-<div class="instruction" id="instr">点击水下的欲望泡泡，让它浮上水面（最多同时3个）</div>
+<div class="instruction" id="instr">识别现在是哪种想要，点击允许释放</div>
 <div class="counter"     id="counter">已释放 0 个欲望</div>
 <div class="toast"       id="toast"></div>
 
@@ -719,66 +719,48 @@ function spawnIdleBubble(desireOverride) {
 }
 
 // ═══════════════════════════════════════════════════
-//  CLICK → RISE TO SURFACE
+//  CLICK → FLY DIRECTLY TO SKY
 // ═══════════════════════════════════════════════════
 function onBubbleClick(entry) {
   if (entry.clicked) return;
   entry.clicked = true;
 
-  const slotIdx = risingSlots.findIndex(s => s === null);
-  if (slotIdx === -1) {
-    entry.clicked = false;
-    showToast('最多同时觉察 3 个欲望');
-    return;
-  }
-
   idleBubbles = idleBubbles.filter(b => b !== entry);
+  entry.physicsActive = false;
 
   const { el, desire, sz } = entry;
-  entry.physicsActive = false;
-  idleBubbles = idleBubbles.filter(b => b !== entry);
 
-  // Resolve current position (physics uses transform offset from initLeft/initTop)
-  const curLeft = entry.initLeft + (entry.px - entry.sz/2 - entry.initLeft);
-  const curTop  = entry.initTop  + (entry.py - entry.sz/2 - entry.initTop);
-
-  // Switch to absolute positioning, clear transform
+  // Fix position from physics coordinates
   el.style.transition = 'none';
   el.style.transform  = 'none';
   el.style.left = `${entry.px - sz/2}px`;
   el.style.top  = `${entry.py - sz/2}px`;
-
-  el.classList.remove('idle');
-  el.classList.add('rising');
-  el.style.animation    = 'none';
   el.style.pointerEvents = 'none';
+  el.style.cursor = 'default';
+  // Keep idle class so bubble background/border stays visible
+  // just remove hover effects
+  el.style.filter = 'none';
 
-  const tSz    = TSZ;
-  const target = surfaceSlotPos(slotIdx);
-  const cLeft  = entry.px - sz / 2;
-  const cTop   = entry.py - sz / 2;
-  const dist   = Math.hypot(target.x - cLeft, target.y - cTop);
-  const dur    = Math.max(0.7, dist / RISE_SPEED);
+  const label = desire.label.replace('\n', '');
+  showToast(`🌸 「${label}」已悄然离去`);
 
-  el.style.transition = `left ${dur.toFixed(2)}s cubic-bezier(0.3,1.2,0.6,1), top ${dur.toFixed(2)}s cubic-bezier(0.3,1.2,0.6,1), width ${dur.toFixed(2)}s ease, height ${dur.toFixed(2)}s ease`;
-  el.style.left   = `${target.x - tSz/2}px`;
-  el.style.top    = `${target.y - tSz/2}px`;
-  el.style.width  = `${tSz}px`;
-  el.style.height = `${tSz}px`;
-  el.style.zIndex = '14';
+  // Fly to sky via JS transition
+  const currentTop = entry.py - sz/2;
+  el.style.zIndex = '18';
 
-  const slotEntry = { el, desire, slotIdx, tSz };
-  risingSlots[slotIdx] = slotEntry;
+  requestAnimationFrame(() => requestAnimationFrame(() => {
+    el.style.transition = 'top 1.9s cubic-bezier(0.22,0.58,0.38,0.96), opacity 1.9s ease';
+    el.style.top     = `${currentTop - 600}px`;
+    el.style.opacity = '0';
+  }));
 
   setTimeout(() => {
-    el.classList.remove('rising');
-    el.classList.add('at-surface');
-    el.style.transition = '';
-    tryMerge(); // immediately auto-releases
+    el.remove();
+    released++;
+    document.getElementById('counter').textContent = `已释放 ${released} 个欲望`;
+    setTimeout(() => spawnIdleBubble(desire), 800);
     updateInstruction();
-  }, dur * 1000 + 60);
-
-
+  }, 1950);
 }
 
 // ═══════════════════════════════════════════════════
@@ -833,7 +815,7 @@ function updateInstruction() {
   const active = risingSlots.filter(Boolean).length;
   const atSurf = risingSlots.filter(s => s && s.el.classList.contains('at-surface')).length;
   if (active === 0) {
-    document.getElementById('instr').textContent = '点击水下的欲望泡泡，让它浮上水面（最多同时3个）';
+    document.getElementById('instr').textContent = '识别现在是哪种想要，点击允许释放';
   } else if (atSurf > 0) {
     document.getElementById('instr').textContent = '欲望正在飘离……';
   } else {
